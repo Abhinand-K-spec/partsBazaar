@@ -1,0 +1,60 @@
+import axios from 'axios';
+
+const API = axios.create({
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+    headers: { 'Content-Type': 'application/json' },
+});
+
+// Attach JWT token to every request if available
+API.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// Response interceptor: handle 401
+API.interceptors.response.use(
+    (res) => res,
+    (err) => {
+        if (err.response?.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+        }
+        return Promise.reject(err);
+    }
+);
+
+// ─── Auth ────────────────────────────────────────
+export const apiLogin = (data) => API.post('/auth/login', data);
+export const apiRegister = (data) => API.post('/auth/register', data);
+export const apiGetMe = () => API.get('/auth/me');
+export const apiUpdateProfile = (data) => API.put('/auth/profile', data);
+
+// ─── Products ────────────────────────────────────
+export const apiGetProducts = (params) => API.get('/products', { params });
+export const apiGetTrendingProducts = () => API.get('/products/trending');
+export const apiGetRareProducts = () => API.get('/products/rare');
+export const apiGetProduct = (id) => API.get(`/products/${id}`);
+export const apiCreateProduct = (data) => API.post('/products', data);
+export const apiUpdateProduct = (id, data) => API.put(`/products/${id}`, data);
+export const apiDeleteProduct = (id) => API.delete(`/products/${id}`);
+
+// ─── Brands ──────────────────────────────────────
+export const apiGetBrands = () => API.get('/brands');
+
+// ─── Orders ──────────────────────────────────────
+export const apiCreateOrder = (data) => API.post('/orders', data);
+export const apiGetMyOrders = () => API.get('/orders/mine');
+export const apiGetAllOrders = (params) => API.get('/orders', { params });
+export const apiGetOrderStats = () => API.get('/orders/stats');
+export const apiUpdateOrderStatus = (id, status) => API.put(`/orders/${id}/status`, { status });
+export const apiGetOrder = (id) => API.get(`/orders/${id}`);
+
+// ─── Users (Admin) ───────────────────────────────
+export const apiGetUsers = (params) => API.get('/users', { params });
+export const apiDeleteUser = (id) => API.delete(`/users/${id}`);
+export const apiUpdateUser = (id, data) => API.put(`/users/${id}`, data);
+
+export default API;
