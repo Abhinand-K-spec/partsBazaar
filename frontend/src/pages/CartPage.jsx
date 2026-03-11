@@ -36,17 +36,17 @@ export default function CartPage() {
                 {/* Cart items */}
                 <div className="lg:col-span-2 space-y-4">
                     {cartItems.map(item => (
-                        <div key={item.id} className="card p-5 flex gap-4">
-                            <Link to={`/product/${item.id}`}>
+                        <div key={item._id || item.id} className="card p-5 flex gap-4">
+                            <Link to={`/product/${item._id || item.id}`}>
                                 <img src={item.image} alt={item.name} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl flex-shrink-0 hover:scale-105 transition-transform" />
                             </Link>
 
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between gap-2">
-                                    <Link to={`/product/${item.id}`}>
+                                    <Link to={`/product/${item._id || item.id}`}>
                                         <h3 className="font-semibold text-gray-900 dark:text-white text-sm hover:text-blue-600 dark:hover:text-blue-400 line-clamp-2">{item.name}</h3>
                                     </Link>
-                                    <button onClick={() => removeFromCart(item.id)} className="text-gray-400 hover:text-red-500 transition-colors shrink-0 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950">
+                                    <button onClick={() => removeFromCart(item._id || item.id)} className="text-gray-400 hover:text-red-500 transition-colors shrink-0 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -59,11 +59,11 @@ export default function CartPage() {
                                 <div className="flex items-center justify-between mt-3">
                                     {/* Quantity */}
                                     <div className="flex items-center gap-0 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-                                        <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold transition-colors">
+                                        <button onClick={() => updateQuantity(item._id || item.id, item.quantity - 1)} className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold transition-colors">
                                             <Minus className="w-3.5 h-3.5" />
                                         </button>
                                         <span className="px-3 py-2 font-semibold text-gray-900 dark:text-white text-sm min-w-[2.5rem] text-center">{item.quantity}</span>
-                                        <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold transition-colors">
+                                        <button onClick={() => updateQuantity(item._id || item.id, item.quantity + 1)} className="px-3 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 font-bold transition-colors">
                                             <Plus className="w-3.5 h-3.5" />
                                         </button>
                                     </div>

@@ -7,6 +7,13 @@ import { useWishlist } from '../../context/WishlistContext';
 import { sampleSearchSuggestions, phoneModels } from '../../data/mockData';
 import { apiGetCategories } from '../../data/api';
 
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+const getCatImageUrl = (img) => {
+    if (!img) return null;
+    if (img.startsWith('http')) return img;
+    return `${API_BASE}${img}`;
+};
+
 export default function Navbar() {
     const { totalItems } = useCart();
     const { wishlist } = useWishlist();
@@ -191,9 +198,12 @@ export default function Navbar() {
                         <Link
                             key={cat._id}
                             to={`/search?category=${encodeURIComponent(cat.name)}`}
-                            className="shrink-0 px-3 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap"
+                            className="shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap"
                         >
-                            {cat.icon ? `${cat.icon} ` : ''}{cat.name}
+                            {getCatImageUrl(cat.image)
+                                ? <img src={getCatImageUrl(cat.image)} alt="" className="w-4 h-4 rounded object-cover" />
+                                : null}
+                            {cat.name}
                         </Link>
                     ))}
                     <Link

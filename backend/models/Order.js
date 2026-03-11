@@ -28,7 +28,7 @@ const orderSchema = new mongoose.Schema({
     },
     paymentMethod: {
         type: String,
-        enum: ['upi', 'card', 'netbanking', 'cod'],
+        enum: ['razorpay', 'cod'],
         required: true,
     },
     itemsPrice: { type: Number, required: true },
@@ -43,6 +43,9 @@ const orderSchema = new mongoose.Schema({
     timeline: [timelineSchema],
     isPaid: { type: Boolean, default: false },
     paidAt: { type: Date },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
     isDelivered: { type: Boolean, default: false },
     deliveredAt: { type: Date },
 }, { timestamps: true });

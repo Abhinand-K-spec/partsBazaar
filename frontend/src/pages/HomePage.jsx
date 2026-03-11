@@ -5,6 +5,13 @@ import { technicianOffers, sampleSearchSuggestions, phoneModels } from '../data/
 import { apiGetTrendingProducts, apiGetRareProducts, apiGetBrands, apiGetProducts, apiGetCategories } from '../data/api';
 import ProductCard from '../components/products/ProductCard';
 
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+const getCatImageUrl = (img) => {
+    if (!img) return null;
+    if (img.startsWith('http')) return img;
+    return `${API_BASE}${img}`;
+};
+
 const heroSearches = ['iPhone 11 Display', 'Redmi Note 8 Charging Port', 'Samsung A50 Battery', 'Nokia 6 Power Button'];
 
 function HeroSection() {
@@ -266,7 +273,13 @@ export default function HomePage() {
                                     onClick={() => navigate(`/search?category=${encodeURIComponent(cat.name)}`)}
                                     className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
                                 >
-                                    <span className="text-2xl">{cat.icon || '📦'}</span>
+                                    {getCatImageUrl(cat.image) ? (
+                                        <img src={getCatImageUrl(cat.image)} alt={cat.name} className="w-10 h-10 rounded-xl object-cover group-hover:scale-110 transition-transform duration-200" />
+                                    ) : (
+                                        <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-xl group-hover:scale-110 transition-transform duration-200">
+                                            📦
+                                        </div>
+                                    )}
                                     <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-center leading-tight">{cat.name}</span>
                                 </button>
                             ))}
@@ -329,9 +342,17 @@ export default function HomePage() {
                                     onClick={() => navigate(`/search?brand=${encodeURIComponent(brand.name)}`)}
                                     className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                 >
-                                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${brand.color} flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition-transform`}>
-                                        {brand.logo}
-                                    </div>
+                                    {getCatImageUrl(brand.image) ? (
+                                        <img
+                                            src={getCatImageUrl(brand.image)}
+                                            alt={brand.name}
+                                            className="w-12 h-12 rounded-2xl object-contain bg-white p-1 shadow-md group-hover:scale-110 transition-transform"
+                                        />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-bold text-lg shadow-md group-hover:scale-110 transition-transform">
+                                            {brand.name.charAt(0)}
+                                        </div>
+                                    )}
                                     <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{brand.name}</p>
                                     <p className="text-xs text-gray-400">{brand.count} parts</p>
                                 </button>

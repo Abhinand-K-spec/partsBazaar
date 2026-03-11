@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, Lock, CreditCard, Smartphone, Building2, ChevronRight, Package } from 'lucide-react';
+import { CheckCircle, Lock, CreditCard, Smartphone, Building2, ChevronRight, Package, Loader2, Plus } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { apiCreateOrder, apiVerifyPayment, apiGetMe, apiAddAddress } from '../data/api';
+import toast from 'react-hot-toast';
 
 const STEPS = ['Address', 'Payment', 'Confirm'];
 
@@ -15,6 +18,48 @@ export default function CheckoutPage() {
     });
     const [payment, setPayment] = useState('upi');
     const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [orderId, setOrderId] = useState(null); // DB order ID
+    
+    // Address Selection State
+    const { user } = useAuth();
+    const [savedAddresses, setSavedAddresses] = useState([]);
+    const [selectedAddressId, setSelectedAddressId] = useState('new');
+    const [loadingAddresses, setLoadingAddresses] = useState(false);
+    const [saveNewAddress, setSaveNewAddress] = useState(true);
+
+    useEffect(() => {
+        if (user) {
+            setLoadingAddresses(true);
+            apiGetMe().then(res => {
+                const addrs = res.data.user.savedAddresses || [];
+                setSavedAddresses(addrs);
+                if (addrs.length > 0) {
+                    const def = addrs.find(a => a.isDefault) || addrs[0];
+                    setSelectedAddressId(def._id);
+                    setAddress({
+                        name: def.name || '', phone: def.phone || '', pincode: def.pincode || '',
+                        street: def.street || '', city: def.city || '', state: def.state || ''
+                    });
+                }
+            }).catch(err => console.error("Failed to load addresses", err))
+              .finally(() => setLoadingAddresses(false));
+        }
+    }, [user]);
+
+    const handleSelectAddress = (addr) => {
+        if (addr === 'new') {
+            setSelectedAddressId('new');
+            setAddress({ name: '', phone: '', pincode: '', street: '', city: '', state: '' });
+        } else {
+            setSelectedAddressId(addr._id);
+            setAddress({
+                name: addr.name || '', phone: addr.phone || '', pincode: addr.pincode || '',
+                street: addr.street || '', city: addr.city || '', state: addr.state || ''
+            });
+            setErrors({});
+        }
+    };
 
     const shipping = totalPrice > 2000 ? 0 : 99;
     const gst = Math.round(totalPrice * 0.18);
@@ -32,14 +77,121 @@ export default function CheckoutPage() {
         return Object.keys(e).length === 0;
     };
 
-    const handleNext = () => {
-        if (step === 0 && !validateAddress()) return;
-        if (step < STEPS.length - 1) setStep(s => s + 1);
-        else {
-            // Place order
-            clearCart();
-            setPlaced(true);
+    const loadRazorpayScript = () => {
+        return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+    };
+
+    const processRazorpay = async (orderData) => {
+        const res = await loadRazorpayScript();
+        if (!res) {
+            toast.error('Razorpay SDK failed to load. Are you online?');
+            return;
         }
+
+        const options = {
+            key: orderData.keyId,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            name: 'PartsBazaar',
+            description: 'Order Payment',
+            order_id: orderData.razorpayOrderId,
+            handler: async function (response) {
+                try {
+                    const tid = toast.loading('Verifying payment...');
+                    await apiVerifyPayment({
+                        orderId: orderData.orderId,
+                        razorpayOrderId: response.razorpay_order_id,
+                        razorpayPaymentId: response.razorpay_payment_id,
+                        razorpaySignature: response.razorpay_signature,
+                    });
+                    toast.success('Payment successful!', { id: tid });
+                    setOrderId(`ORD-${orderData.orderId.slice(-6).toUpperCase()}`);
+                    clearCart();
+                    setPlaced(true);
+                } catch (error) {
+                    toast.error('Payment verification failed');
+                    console.error(error);
+                }
+            },
+            prefill: {
+                name: address.name,
+                contact: address.phone,
+            },
+            theme: { color: '#2563eb' }
+        };
+
+        const paymentObject = new window.Razorpay(options);
+        paymentObject.open();
+
+        paymentObject.on('payment.failed', function () {
+            toast.error('Payment failed. Please try again.');
+        });
+    };
+
+    const handleNext = async () => {
+        if (step === 0) {
+            if (!validateAddress()) return;
+            if (user && selectedAddressId === 'new' && saveNewAddress) {
+                try {
+                    const { data } = await apiAddAddress({ ...address, isDefault: savedAddresses.length === 0 });
+                    setSavedAddresses(data.addresses);
+                    const newAddr = data.addresses[data.addresses.length - 1];
+                    setSelectedAddressId(newAddr._id);
+                } catch (err) {
+                    toast.error("Could not save address to profile.");
+                }
+            }
+            setStep(1);
+            return;
+        }
+
+        if (step < STEPS.length - 1) {
+            setStep(s => s + 1);
+            return;
+        }
+
+        // Place order
+        setLoading(true);
+        const tid = toast.loading('Processing order...');
+        try {
+            const payload = {
+                items: cartItems.map(i => ({ 
+                    product: i._id || i.id, 
+                    name: i.name, 
+                    image: i.image, 
+                    price: i.price, 
+                    quantity: i.quantity 
+                })),
+                shippingAddress: address,
+                subtotal: totalPrice,
+                shipping,
+                gst,
+                total: grandTotal,
+                paymentMethod: payment === 'cod' ? 'cod' : 'razorpay'
+            };
+
+            const { data } = await apiCreateOrder(payload);
+
+            toast.dismiss(tid);
+
+            if (payment === 'cod') {
+                setOrderId(`ORD-${data.orderId.slice(-6).toUpperCase()}`);
+                clearCart();
+                setPlaced(true);
+            } else {
+                await processRazorpay(data);
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to create order', { id: tid });
+            console.error(error);
+        }
+        setLoading(false);
     };
 
     if (placed) {
@@ -50,7 +202,7 @@ export default function CheckoutPage() {
                         <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Order Placed! 🎉</h2>
-                    <p className="text-gray-500 text-sm">Your order <strong className="text-gray-900 dark:text-white">#ORD-2025-{Math.floor(Math.random() * 900 + 100)}</strong> has been placed successfully.</p>
+                    <p className="text-gray-500 text-sm">Your order <strong className="text-gray-900 dark:text-white">#{orderId}</strong> has been placed successfully.</p>
 
                     <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 text-sm space-y-2 text-left">
                         <div className="flex justify-between text-gray-600 dark:text-gray-400">
@@ -110,27 +262,69 @@ export default function CheckoutPage() {
                     {step === 0 && (
                         <div className="card p-6 space-y-5">
                             <h2 className="font-bold text-gray-900 dark:text-white text-lg flex items-center gap-2"><Package className="w-5 h-5 text-blue-600" /> Delivery Address</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {[
-                                    { key: 'name', label: 'Full Name', placeholder: 'Ravi Kumar', col: 2 },
-                                    { key: 'phone', label: 'Phone Number', placeholder: '9876543210' },
-                                    { key: 'pincode', label: 'Pincode', placeholder: '400001' },
-                                    { key: 'street', label: 'Street Address', placeholder: 'Shop 12, Sadar Bazar', col: 2 },
-                                    { key: 'city', label: 'City', placeholder: 'Mumbai' },
-                                    { key: 'state', label: 'State', placeholder: 'Maharashtra' },
-                                ].map(f => (
-                                    <div key={f.key} className={f.col === 2 ? 'sm:col-span-2' : ''}>
-                                        <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">{f.label}</label>
-                                        <input
-                                            value={address[f.key]}
-                                            onChange={e => setAddress(a => ({ ...a, [f.key]: e.target.value }))}
-                                            placeholder={f.placeholder}
-                                            className={`input-field ${errors[f.key] ? 'border-red-400 focus:ring-red-400' : ''}`}
-                                        />
-                                        {errors[f.key] && <p className="text-xs text-red-500 mt-1">{errors[f.key]}</p>}
+                            
+                            {user && savedAddresses.length > 0 && (
+                                <div className="space-y-3 mb-6">
+                                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Select a Saved Address</label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {savedAddresses.map(addr => (
+                                            <div 
+                                                key={addr._id} 
+                                                onClick={() => handleSelectAddress(addr)}
+                                                className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedAddressId === addr._id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="font-semibold text-gray-900 dark:text-white text-sm">{addr.name}</span>
+                                                    {addr.isDefault && <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Default</span>}
+                                                </div>
+                                                <p className="text-xs text-gray-500 line-clamp-2">{addr.street}, {addr.city}</p>
+                                                <p className="text-xs text-gray-500 mt-1">{addr.phone}</p>
+                                            </div>
+                                        ))}
+                                        <div 
+                                            onClick={() => handleSelectAddress('new')}
+                                            className={`p-4 rounded-xl border-2 cursor-pointer border-dashed flex flex-col items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-600 transition-all ${selectedAddressId === 'new' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-300 dark:border-gray-700'}`}
+                                        >
+                                            <Plus className="w-5 h-5 mb-1" />
+                                            <span className="text-sm font-semibold">Add New Address</span>
+                                        </div>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            )}
+
+                            {(!user || savedAddresses.length === 0 || selectedAddressId === 'new') && (
+                                <div className="space-y-4">
+                                   {user && savedAddresses.length > 0 && <hr className="border-gray-200 dark:border-gray-700 my-4" />}
+                                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Enter Delivery Details</h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {[
+                                            { key: 'name', label: 'Full Name', placeholder: 'Ravi Kumar', col: 2 },
+                                            { key: 'phone', label: 'Phone Number', placeholder: '9876543210' },
+                                            { key: 'pincode', label: 'Pincode', placeholder: '400001' },
+                                            { key: 'street', label: 'Street Address', placeholder: 'Shop 12, Sadar Bazar', col: 2 },
+                                            { key: 'city', label: 'City', placeholder: 'Mumbai' },
+                                            { key: 'state', label: 'State', placeholder: 'Maharashtra' },
+                                        ].map(f => (
+                                            <div key={f.key} className={f.col === 2 ? 'sm:col-span-2' : ''}>
+                                                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">{f.label}</label>
+                                                <input
+                                                    value={address[f.key]}
+                                                    onChange={e => setAddress(a => ({ ...a, [f.key]: e.target.value }))}
+                                                    placeholder={f.placeholder}
+                                                    className={`input-field ${errors[f.key] ? 'border-red-400 focus:ring-red-400' : ''}`}
+                                                />
+                                                {errors[f.key] && <p className="text-xs text-red-500 mt-1">{errors[f.key]}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {user && (
+                                        <label className="flex items-center gap-2 mt-4 cursor-pointer w-fit">
+                                            <input type="checkbox" checked={saveNewAddress} onChange={e => setSaveNewAddress(e.target.checked)} className="rounded text-blue-600 w-4 h-4 cursor-pointer" />
+                                            <span className="text-sm text-gray-700 dark:text-gray-300 font-medium select-none">Save this address for future orders</span>
+                                        </label>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -185,7 +379,7 @@ export default function CheckoutPage() {
                             <h2 className="font-bold text-gray-900 dark:text-white text-lg">Confirm Your Order</h2>
                             <div className="space-y-3">
                                 {cartItems.map(item => (
-                                    <div key={item.id} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                                    <div key={item._id || item.id} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-gray-800 last:border-0">
                                         <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl" />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1">{item.name}</p>
@@ -212,8 +406,8 @@ export default function CheckoutPage() {
                         ) : (
                             <Link to="/cart" className="btn-outline">← Cart</Link>
                         )}
-                        <button onClick={handleNext} className="btn-accent px-8 flex items-center gap-2">
-                            {step < STEPS.length - 1 ? <>Next <ChevronRight className="w-4 h-4" /></> : <><CheckCircle className="w-4 h-4" /> Place Order</>}
+                        <button onClick={handleNext} disabled={loading} className="btn-accent px-8 flex items-center gap-2">
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : step < STEPS.length - 1 ? <>Next <ChevronRight className="w-4 h-4" /></> : <><CheckCircle className="w-4 h-4" /> Place Order</>}
                         </button>
                     </div>
                 </div>
@@ -224,7 +418,7 @@ export default function CheckoutPage() {
                         <h3 className="font-bold text-gray-900 dark:text-white">Order Summary</h3>
                         <div className="space-y-2 text-sm">
                             {cartItems.map(item => (
-                                <div key={item.id} className="flex justify-between text-gray-600 dark:text-gray-400">
+                                <div key={item._id || item.id} className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span className="line-clamp-1 max-w-[160px]">{item.name} ×{item.quantity}</span>
                                     <span>₹{(item.price * item.quantity).toLocaleString()}</span>
                                 </div>

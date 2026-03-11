@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     accountType: { type: String, enum: ['Individual', 'Repair Shop', 'Wholesaler'], default: 'Individual' },
     savedAddresses: [{
-        label: String,
+        label: { type: String, default: 'Home' },
+        name: String,
+        phone: String,
         street: String,
         city: String,
         state: String,

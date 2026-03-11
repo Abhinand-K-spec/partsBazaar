@@ -1,11 +1,18 @@
 import express from 'express';
 import asyncHandler from 'express-async-handler';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { protect } from '../middleware/auth.js';
 import { adminOnly } from '../middleware/admin.js';
 
 const router = express.Router();
+
+const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key_id',
+    key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret',
+});
 
 const buildTimeline = (status) => {
     const steps = [
@@ -64,6 +71,21 @@ router.post('/', protect, asyncHandler(async (req, res) => {
     const gstPrice = Math.round(itemsPrice * 0.18);
     const totalPrice = itemsPrice + shippingPrice + gstPrice;
 
+    // For Razorpay
+    let razorpayOrderId = null;
+    if (paymentMethod === 'razorpay') {
+        if (process.env.RAZORPAY_KEY_ID === 'dummy_key_id' || !process.env.RAZORPAY_KEY_ID) {
+            res.status(500);
+            throw new Error('Razorpay keys are not configured in backend .env');
+        }
+        const razorpayOrder = await razorpay.orders.create({
+            amount: Math.round(totalPrice * 100),
+            currency: 'INR',
+            receipt: `rcpt_${Date.now()}`,
+        });
+        razorpayOrderId = razorpayOrder.id;
+    }
+
     const order = await Order.create({
         user: req.user._id,
         items: orderItems,
@@ -75,11 +97,56 @@ router.post('/', protect, asyncHandler(async (req, res) => {
         totalPrice,
         status: 'ordered',
         timeline: buildTimeline('ordered'),
-        isPaid: paymentMethod !== 'cod',
-        paidAt: paymentMethod !== 'cod' ? new Date() : null,
+        razorpayOrderId,
+        isPaid: paymentMethod === 'cod', // COD is technically not paid until it's delivered, but old code had it as true? Wait, old code said isPaid is false if cod. We'll set it to false.
     });
 
-    res.status(201).json({ success: true, order });
+    if (paymentMethod === 'cod') {
+        // Assume COD isn't paid until delivery, or if they want it true we can do that. Setting to false.
+        order.isPaid = false; 
+        await order.save();
+    }
+
+    if (paymentMethod === 'razorpay') {
+        res.status(201).json({
+            success: true,
+            orderId: order._id,
+            razorpayOrderId,
+            amount: Math.round(totalPrice * 100),
+            currency: 'INR',
+            keyId: process.env.RAZORPAY_KEY_ID,
+        });
+    } else {
+        res.status(201).json({ success: true, orderId: order._id });
+    }
+}));
+
+// @route POST /api/orders/verify — Verify Razorpay Payment
+router.post('/verify', protect, asyncHandler(async (req, res) => {
+    const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
+
+    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
+    hmac.update(`${razorpayOrderId}|${razorpayPaymentId}`);
+    const digest = hmac.digest('hex');
+
+    if (digest !== razorpaySignature) {
+        res.status(400);
+        throw new Error('Payment verification failed — invalid signature');
+    }
+
+    const order = await Order.findByIdAndUpdate(orderId, {
+        isPaid: true,
+        paidAt: new Date(),
+        razorpayPaymentId,
+        razorpaySignature,
+    }, { new: true });
+
+    if (!order) {
+        res.status(404);
+        throw new Error('Order not found');
+    }
+
+    res.json({ success: true, order });
 }));
 
 // @route GET /api/orders/mine — My orders

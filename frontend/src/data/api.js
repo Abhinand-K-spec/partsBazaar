@@ -31,6 +31,8 @@ export const apiLogin = (data) => API.post('/auth/login', data);
 export const apiRegister = (data) => API.post('/auth/register', data);
 export const apiGetMe = () => API.get('/auth/me');
 export const apiUpdateProfile = (data) => API.put('/auth/profile', data);
+export const apiAddAddress = (data) => API.post('/auth/addresses', data);
+export const apiDeleteAddress = (id) => API.delete(`/auth/addresses/${id}`);
 
 // ─── Products ────────────────────────────────────
 export const apiGetProducts = (params) => API.get('/products', { params });
@@ -47,6 +49,7 @@ export const apiCreateCategory = (data) => API.post('/categories', data);
 export const apiUpdateCategory = (id, data) => API.put(`/categories/${id}`, data);
 export const apiDeleteCategory = (id) => API.delete(`/categories/${id}`);
 
+
 // ─── Brands ──────────────────────────────────────
 export const apiGetBrands = () => API.get('/brands');
 export const apiCreateBrand = (data) => API.post('/brands', data);
@@ -60,6 +63,7 @@ export const apiUploadImage = (formData) => API.post('/upload', formData, {
 
 // ─── Orders ──────────────────────────────────────
 export const apiCreateOrder = (data) => API.post('/orders', data);
+export const apiVerifyPayment = (data) => API.post('/orders/verify', data);
 export const apiGetMyOrders = () => API.get('/orders/mine');
 export const apiGetAllOrders = (params) => API.get('/orders', { params });
 export const apiGetOrderStats = () => API.get('/orders/stats');

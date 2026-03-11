@@ -109,4 +109,43 @@ router.put('/profile', protect, asyncHandler(async (req, res) => {
     });
 }));
 
+// @route POST /api/auth/addresses
+// Add a new saved address
+router.post('/addresses', protect, asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+
+    // Set as default if it's the first address or explicitly marked
+    if (user.savedAddresses.length === 0 || req.body.isDefault) {
+        // If this new one is default, unmark others
+        if (req.body.isDefault) {
+            user.savedAddresses.forEach(a => { a.isDefault = false; });
+        }
+        req.body.isDefault = true;
+    }
+
+    user.savedAddresses.push(req.body);
+    await user.save();
+    res.json({ success: true, addresses: user.savedAddresses });
+}));
+
+// @route DELETE /api/auth/addresses/:id
+// Remove a saved address
+router.delete('/addresses/:id', protect, asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+
+    user.savedAddresses = user.savedAddresses.filter(
+        a => a._id.toString() !== req.params.id
+    );
+    await user.save();
+    res.json({ success: true, addresses: user.savedAddresses });
+}));
+
 export default router;
