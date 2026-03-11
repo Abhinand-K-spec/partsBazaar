@@ -5,11 +5,8 @@ const productSchema = new mongoose.Schema({
     brand: { type: mongoose.Schema.Types.ObjectId, ref: 'Brand', required: true },
     brandName: { type: String, required: true },  // denormalized for fast queries
     model: { type: String, required: true },
-    partType: {
-        type: String,
-        required: true,
-        enum: ['display', 'battery', 'charging-port', 'camera', 'speaker', 'back-cover', 'motherboard', 'power-button', 'volume-button', 'sim-tray'],
-    },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+    categoryName: { type: String, required: true },  // denormalized for fast queries
     price: { type: Number, required: true },
     originalPrice: { type: Number },
     stock: { type: Number, required: true, default: 0 },
@@ -29,7 +26,7 @@ const productSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Full text search index
-productSchema.index({ name: 'text', model: 'text', brandName: 'text', partType: 'text' });
+productSchema.index({ name: 'text', model: 'text', brandName: 'text', categoryName: 'text' });
 
 const Product = mongoose.model('Product', productSchema);
 export default Product;

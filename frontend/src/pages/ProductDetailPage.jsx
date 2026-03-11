@@ -4,10 +4,17 @@ import {
     Star, Shield, Truck, ShoppingCart, Heart, Share2, ChevronLeft,
     Zap, CheckCircle, Clock, Package, ChevronRight, ZoomIn
 } from 'lucide-react';
-import { products } from '../data/mockData';
+import { apiGetProduct, apiGetProducts } from '../data/api';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import ProductCard from '../components/products/ProductCard';
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+const getImageUrl = (img) => {
+    if (!img) return 'https://placehold.co/800x800?text=No+Image';
+    if (img.startsWith('http')) return img;
+    return `${API_BASE}${img}`;
+};
 
 export default function ProductDetailPage() {
     const { id } = useParams();
@@ -18,11 +25,35 @@ export default function ProductDetailPage() {
     const [qty, setQty] = useState(1);
     const [added, setAdded] = useState(false);
     const [activeTab, setActiveTab] = useState('description');
+    const [product, setProduct] = useState(null);
+    const [related, setRelated] = useState([]);
+    const [loadingProduct, setLoadingProduct] = useState(true);
 
-    const product = products.find(p => p.id === parseInt(id));
-    const related = products.filter(p => p.partType === product?.partType && p.id !== product?.id).slice(0, 4);
+    useEffect(() => {
+        setLoadingProduct(true);
+        setSelectedImg(0); setQty(1); setAdded(false);
+        apiGetProduct(id)
+            .then(res => {
+                const p = res.data.product;
+                setProduct(p);
+                if (p?.categoryName) {
+                    apiGetProducts({ q: p.categoryName, limit: 5 })
+                        .then(r => setRelated((r.data.products || []).filter(x => x._id !== p._id).slice(0, 4)))
+                        .catch(() => {});
+                }
+            })
+            .catch(() => setProduct(null))
+            .finally(() => setLoadingProduct(false));
+    }, [id]);
 
-    useEffect(() => { setSelectedImg(0); setQty(1); setAdded(false); }, [id]);
+    if (loadingProduct) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-96 gap-4">
+                <div className="w-12 h-12 rounded-full border-4 border-blue-600/30 border-t-blue-600 animate-spin" />
+                <p className="text-gray-400">Loading product...</p>
+            </div>
+        );
+    }
 
     if (!product) {
         return (
@@ -44,7 +75,11 @@ export default function ProductDetailPage() {
         ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
         : 0;
 
-    const allImages = product.images || [product.image];
+    // Safely build image list — empty [] is truthy so must check length
+    const mainImg = product.image ? getImageUrl(product.image) : null;
+    const extraImgs = (product.images || []).filter(Boolean).map(getImageUrl);
+    const allImages = extraImgs.length > 0 ? extraImgs : (mainImg ? [mainImg] : []);
+    const displayImage = allImages[selectedImg] || mainImg || 'https://placehold.co/800x800?text=No+Image';
 
     const mockReviews = [
         { id: 1, user: 'Ravi K.', rating: 5, date: '2 days ago', comment: 'Excellent quality! Exact fit for the model. Display works perfectly.' },
@@ -68,7 +103,7 @@ export default function ProductDetailPage() {
                 <div className="space-y-4">
                     <div className="relative overflow-hidden rounded-2xl bg-gray-100 dark:bg-gray-800 aspect-square group">
                         <img
-                            src={allImages[selectedImg]}
+                            src={displayImage}
                             alt={product.name}
                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         />
@@ -112,8 +147,8 @@ export default function ProductDetailPage() {
                     {/* Brand + wishlist */}
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
-                            <span className="badge bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-sm">{product.brand}</span>
-                            <span className="badge bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-sm">{product.partType}</span>
+                            <span className="badge bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-sm">{product.brandName || (typeof product.brand === 'string' ? product.brand : '')}</span>
+                            <span className="badge bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-sm">{product.categoryName || product.partType}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <button

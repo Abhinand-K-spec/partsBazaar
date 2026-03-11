@@ -10,7 +10,7 @@ const router = express.Router();
 // Supports: ?q=search&brand=Apple&partType=display&rare=true&minPrice=0&maxPrice=5000&inStock=true&page=1&limit=12&sort=popular
 router.get('/', asyncHandler(async (req, res) => {
     const {
-        q, brand, partType, rare, inStock,
+        q, brand, category, rare, inStock,
         minPrice, maxPrice, page = 1, limit = 20, sort = 'popular',
     } = req.query;
 
@@ -21,13 +21,13 @@ router.get('/', asyncHandler(async (req, res) => {
             { name: { $regex: q, $options: 'i' } },
             { model: { $regex: q, $options: 'i' } },
             { brandName: { $regex: q, $options: 'i' } },
-            { partType: { $regex: q, $options: 'i' } },
+            { categoryName: { $regex: q, $options: 'i' } },
             { compatibleModels: { $elemMatch: { $regex: q, $options: 'i' } } },
         ];
     }
 
     if (brand) filter.brandName = brand;
-    if (partType) filter.partType = partType;
+    if (category) filter.categoryName = category;
     if (rare === 'true') filter.isRare = true;
     if (inStock === 'true') filter.stock = { $gt: 0 };
 
@@ -48,8 +48,7 @@ router.get('/', asyncHandler(async (req, res) => {
     const products = await Product.find(filter)
         .sort(sortObj)
         .skip(skip)
-        .limit(Number(limit))
-        .populate('brand', 'name logo color');
+        .limit(Number(limit));
 
     res.json({
         success: true,
@@ -63,22 +62,20 @@ router.get('/', asyncHandler(async (req, res) => {
 // @route GET /api/products/trending
 router.get('/trending', asyncHandler(async (req, res) => {
     const products = await Product.find({ isTrending: true, isActive: true })
-        .limit(8)
-        .populate('brand', 'name logo');
+        .limit(8);
     res.json({ success: true, products });
 }));
 
 // @route GET /api/products/rare
 router.get('/rare', asyncHandler(async (req, res) => {
     const products = await Product.find({ isRare: true, isActive: true })
-        .limit(8)
-        .populate('brand', 'name logo');
+        .limit(8);
     res.json({ success: true, products });
 }));
 
 // @route GET /api/products/:id
 router.get('/:id', asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id).populate('brand', 'name logo color');
+    const product = await Product.findById(req.params.id);
     if (!product || !product.isActive) {
         res.status(404);
         throw new Error('Product not found');

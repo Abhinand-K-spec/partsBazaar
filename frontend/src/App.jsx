@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
 import HomePage from './pages/HomePage';
 import SearchPage from './pages/SearchPage';
@@ -13,6 +13,35 @@ import CheckoutPage from './pages/CheckoutPage';
 import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import LoginPage from './pages/LoginPage';
+import { ProtectedRoute, AdminRoute } from './components/layout/ProtectedRoute';
+
+// Inner component so it can consume AuthContext (AuthProvider is a parent of this)
+function AppRoutes() {
+  const { user, isAdmin } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<HomePage />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="product/:id" element={<ProductDetailPage />} />
+        <Route path="cart" element={<CartPage />} />
+        <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+        <Route path="dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
+        {/* If a logged-in user visits /login, redirect them appropriately */}
+        <Route
+          path="login"
+          element={user ? <Navigate to={isAdmin ? '/admin' : '/dashboard'} replace /> : <LoginPage />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+      <Route
+        path="/admin"
+        element={<AdminRoute><AdminDashboard /></AdminRoute>}
+      />
+    </Routes>
+  );
+}
 
 export default function App() {
   return (
@@ -43,19 +72,7 @@ export default function App() {
                   },
                 }}
               />
-              <Routes>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<HomePage />} />
-                  <Route path="search" element={<SearchPage />} />
-                  <Route path="product/:id" element={<ProductDetailPage />} />
-                  <Route path="cart" element={<CartPage />} />
-                  <Route path="checkout" element={<CheckoutPage />} />
-                  <Route path="dashboard" element={<UserDashboard />} />
-                  <Route path="login" element={<LoginPage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Route>
-                <Route path="/admin" element={<AdminDashboard />} />
-              </Routes>
+              <AppRoutes />
             </BrowserRouter>
           </WishlistProvider>
         </CartProvider>

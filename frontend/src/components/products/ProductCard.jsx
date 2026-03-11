@@ -3,6 +3,15 @@ import { Heart, ShoppingCart, Star, Zap, Shield } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+
+// Resolve image URL: prepend backend host for local /uploads/ paths
+const getImageUrl = (img) => {
+    if (!img) return 'https://placehold.co/400x400?text=No+Image';
+    if (img.startsWith('http')) return img;          // Cloudinary or external URL
+    return `${API_BASE}${img}`;                       // local /uploads/... path
+};
+
 function StockBadge({ stock }) {
     if (stock === 0) return <span className="badge bg-red-100 dark:bg-red-950 text-red-600 dark:text-red-400">Out of Stock</span>;
     if (stock <= 5) return <span className="badge bg-orange-100 dark:bg-orange-950 text-orange-600 dark:text-orange-400">Only {stock} left</span>;
@@ -34,7 +43,7 @@ export default function ProductCard({ product, skeleton = false }) {
             {/* Image */}
             <Link to={`/product/${product._id || product.id}`} className="relative block overflow-hidden bg-gray-100 dark:bg-gray-800">
                 <img
-                    src={product.image}
+                    src={getImageUrl(product.image)}
                     alt={product.name}
                     className="w-full h-44 object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"

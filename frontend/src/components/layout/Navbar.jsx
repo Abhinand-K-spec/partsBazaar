@@ -5,6 +5,7 @@ import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { sampleSearchSuggestions, phoneModels } from '../../data/mockData';
+import { apiGetCategories } from '../../data/api';
 
 export default function Navbar() {
     const { totalItems } = useCart();
@@ -18,6 +19,11 @@ export default function Navbar() {
     const navigate = useNavigate();
     const searchRef = useRef(null);
     const location = useLocation();
+    const [categories, setCategories] = useState([]);
+
+    useEffect(() => {
+        apiGetCategories().then(res => setCategories(res.data.categories || [])).catch(() => {});
+    }, []);
 
     useEffect(() => {
         setMobileMenuOpen(false);
@@ -173,25 +179,29 @@ export default function Navbar() {
                     </div>
                 </div>
 
-                {/* Category bar */}
+                {/* Category bar — from DB */}
                 <nav className="hidden sm:flex items-center gap-1 pb-2 overflow-x-auto">
-                    {[
-                        { label: 'All Parts', path: '/search' },
-                        { label: '📱 Displays', path: '/search?partType=display' },
-                        { label: '🔋 Batteries', path: '/search?partType=battery' },
-                        { label: '🔌 Charging Ports', path: '/search?partType=charging-port' },
-                        { label: '📷 Cameras', path: '/search?partType=camera' },
-                        { label: '🔊 Speakers', path: '/search?partType=speaker' },
-                        { label: '✨ Rare Parts', path: '/search?rare=true' },
-                    ].map(item => (
+                    <Link
+                        to="/search"
+                        className="shrink-0 px-3 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap"
+                    >
+                        All Parts
+                    </Link>
+                    {categories.map(cat => (
                         <Link
-                            key={item.label}
-                            to={item.path}
+                            key={cat._id}
+                            to={`/search?category=${encodeURIComponent(cat.name)}`}
                             className="shrink-0 px-3 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-blue-50 dark:hover:bg-blue-950 hover:text-blue-700 dark:hover:text-blue-300 transition-colors whitespace-nowrap"
                         >
-                            {item.label}
+                            {cat.icon ? `${cat.icon} ` : ''}{cat.name}
                         </Link>
                     ))}
+                    <Link
+                        to="/search?rare=true"
+                        className="shrink-0 px-3 py-1 rounded-lg text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950 transition-colors whitespace-nowrap"
+                    >
+                        ⚡ Rare Parts
+                    </Link>
                 </nav>
 
                 {/* Mobile menu */}
@@ -200,16 +210,17 @@ export default function Navbar() {
                         <Link to="/dashboard" className="btn-primary justify-center">My Account</Link>
                         <Link to="/admin" className="btn-outline justify-center">Admin Dashboard</Link>
                         <div className="flex flex-wrap gap-2 mt-1">
-                            {[
-                                { label: 'Displays', path: '/search?partType=display' },
-                                { label: 'Batteries', path: '/search?partType=battery' },
-                                { label: 'Charging Ports', path: '/search?partType=charging-port' },
-                                { label: 'Rare Parts', path: '/search?rare=true' },
-                            ].map(item => (
-                                <Link key={item.label} to={item.path} className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-                                    {item.label}
+                            <Link to="/search" className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                All Parts
+                            </Link>
+                            {categories.map(cat => (
+                                <Link key={cat._id} to={`/search?category=${encodeURIComponent(cat.name)}`} className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                                    {cat.icon ? `${cat.icon} ` : ''}{cat.name}
                                 </Link>
                             ))}
+                            <Link to="/search?rare=true" className="px-3 py-1 rounded-lg text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300">
+                                ⚡ Rare Parts
+                            </Link>
                         </div>
                     </div>
                 )}

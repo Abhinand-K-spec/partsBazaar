@@ -41,8 +41,22 @@ export const apiCreateProduct = (data) => API.post('/products', data);
 export const apiUpdateProduct = (id, data) => API.put(`/products/${id}`, data);
 export const apiDeleteProduct = (id) => API.delete(`/products/${id}`);
 
+// ─── Categories ──────────────────────────────────
+export const apiGetCategories = () => API.get('/categories');
+export const apiCreateCategory = (data) => API.post('/categories', data);
+export const apiUpdateCategory = (id, data) => API.put(`/categories/${id}`, data);
+export const apiDeleteCategory = (id) => API.delete(`/categories/${id}`);
+
 // ─── Brands ──────────────────────────────────────
 export const apiGetBrands = () => API.get('/brands');
+export const apiCreateBrand = (data) => API.post('/brands', data);
+export const apiUpdateBrand = (id, data) => API.put(`/brands/${id}`, data);
+export const apiDeleteBrand = (id) => API.delete(`/brands/${id}`);
+
+// ─── Upload ──────────────────────────────────────
+export const apiUploadImage = (formData) => API.post('/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+});
 
 // ─── Orders ──────────────────────────────────────
 export const apiCreateOrder = (data) => API.post('/orders', data);

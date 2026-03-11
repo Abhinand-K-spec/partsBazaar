@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Filter, X, ChevronDown, ChevronUp, SlidersHorizontal, Grid, List } from 'lucide-react';
-import { products, brands, partTypes } from '../data/mockData';
+import { Filter, X, ChevronDown, ChevronUp, SlidersHorizontal } from 'lucide-react';
+import { apiGetProducts, apiGetBrands, apiGetCategories } from '../data/api';
 import ProductCard from '../components/products/ProductCard';
 
 const priceRanges = [
@@ -9,7 +9,7 @@ const priceRanges = [
     { label: '₹500 – ₹1,000', min: 500, max: 1000 },
     { label: '₹1,000 – ₹2,000', min: 1000, max: 2000 },
     { label: '₹2,000 – ₹5,000', min: 2000, max: 5000 },
-    { label: 'Above ₹5,000', min: 5000, max: Infinity },
+    { label: 'Above ₹5,000', min: 5000, max: 999999 },
 ];
 
 function FilterSection({ title, children, defaultOpen = true }) {
@@ -31,7 +31,7 @@ export default function SearchPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [filters, setFilters] = useState({
         brand: searchParams.get('brand') || '',
-        partType: searchParams.get('partType') || '',
+        category: searchParams.get('category') || '',
         priceRange: null,
         availability: false,
         rare: searchParams.get('rare') === 'true',
@@ -39,52 +39,59 @@ export default function SearchPage() {
     const [query, setQuery] = useState(searchParams.get('q') || '');
     const [sort, setSort] = useState('popular');
     const [loading, setLoading] = useState(true);
+    const [products, setProducts] = useState([]);
+    const [total, setTotal] = useState(0);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [brands, setBrands] = useState([]);
+    const [categories, setCategories] = useState([]);
 
+    // Load brands and categories for filter sidebar
     useEffect(() => {
-        setLoading(true);
-        const t = setTimeout(() => setLoading(false), 500);
-        return () => clearTimeout(t);
-    }, [filters, query]);
+        apiGetBrands().then(res => setBrands(res.data.brands || [])).catch(() => {});
+        apiGetCategories().then(res => setCategories(res.data.categories || [])).catch(() => {});
+    }, []);
 
+    // Sync state when URL params change
     useEffect(() => {
         setQuery(searchParams.get('q') || '');
         setFilters(f => ({
             ...f,
             brand: searchParams.get('brand') || '',
-            partType: searchParams.get('partType') || '',
+            category: searchParams.get('category') || '',
             rare: searchParams.get('rare') === 'true',
         }));
     }, [searchParams]);
 
-    const filtered = products.filter(p => {
-        if (query && !p.name.toLowerCase().includes(query.toLowerCase()) &&
-            !p.model.toLowerCase().includes(query.toLowerCase()) &&
-            !p.brand.toLowerCase().includes(query.toLowerCase()) &&
-            !p.partType.toLowerCase().includes(query.toLowerCase())) return false;
-        if (filters.brand && p.brand !== filters.brand) return false;
-        if (filters.partType && p.partType !== filters.partType) return false;
-        if (filters.rare && !p.isRare) return false;
-        if (filters.availability && p.stock === 0) return false;
-        if (filters.priceRange) {
-            if (p.price < filters.priceRange.min || p.price > filters.priceRange.max) return false;
-        }
-        return true;
-    }).sort((a, b) => {
-        if (sort === 'price-asc') return a.price - b.price;
-        if (sort === 'price-desc') return b.price - a.price;
-        if (sort === 'rating') return b.rating - a.rating;
-        return b.isTrending - a.isTrending;
-    });
+    // Fetch products whenever filters/query/sort change
+    useEffect(() => {
+        setLoading(true);
+        const params = {
+            ...(query && { q: query }),
+            ...(filters.brand && { brand: filters.brand }),
+            ...(filters.category && { category: filters.category }),
+            ...(filters.rare && { rare: true }),
+            ...(filters.availability && { inStock: true }),
+            ...(filters.priceRange && { minPrice: filters.priceRange.min, maxPrice: filters.priceRange.max }),
+            sort,
+            limit: 50,
+        };
+        apiGetProducts(params)
+            .then(res => {
+                let result = res.data.products || [];
+                setProducts(result);
+                setTotal(res.data.total || result.length);
+            })
+            .catch(() => setProducts([]))
+            .finally(() => setLoading(false));
+    }, [query, filters, sort]);
 
     const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
 
     const activeFilterCount = [
-        filters.brand, filters.partType, filters.priceRange, filters.rare, filters.availability
+        filters.brand, filters.category, filters.priceRange, filters.rare, filters.availability
     ].filter(Boolean).length;
-    const clearAll = () => setFilters({ brand: '', partType: '', priceRange: null, availability: false, rare: false });
 
-
+    const clearAll = () => setFilters({ brand: '', category: '', priceRange: null, availability: false, rare: false });
 
     const Sidebar = () => (
         <div className="w-full space-y-0">
@@ -127,41 +134,44 @@ export default function SearchPage() {
             </div>
 
             {/* Brand */}
-            <FilterSection title="Brand">
-                <div className="space-y-1.5 mt-2">
-                    {brands.map(b => (
-                        <label key={b.id} className="flex items-center gap-2.5 cursor-pointer group">
-                            <input
-                                type="radio"
-                                name="brand"
-                                checked={filters.brand === b.name}
-                                onChange={() => setFilter('brand', filters.brand === b.name ? '' : b.name)}
-                                className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 transition-colors">{b.name}</span>
-                            <span className="ml-auto text-xs text-gray-400">{b.count}</span>
-                        </label>
-                    ))}
-                </div>
-            </FilterSection>
+            {brands.length > 0 && (
+                <FilterSection title="Brand">
+                    <div className="space-y-1.5 mt-2">
+                        {brands.map(b => (
+                            <label key={b._id} className="flex items-center gap-2.5 cursor-pointer group">
+                                <input
+                                    type="radio"
+                                    name="brand"
+                                    checked={filters.brand === b.name}
+                                    onChange={() => setFilter('brand', filters.brand === b.name ? '' : b.name)}
+                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-blue-600 transition-colors">{b.name}</span>
+                            </label>
+                        ))}
+                    </div>
+                </FilterSection>
+            )}
 
-            {/* Part Type */}
-            <FilterSection title="Part Type">
-                <div className="grid grid-cols-2 gap-1.5 mt-2">
-                    {partTypes.map(pt => (
-                        <button
-                            key={pt.id}
-                            onClick={() => setFilter('partType', filters.partType === pt.id ? '' : pt.id)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${filters.partType === pt.id
-                                ? 'bg-blue-600 border-blue-600 text-white'
-                                : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-300 dark:hover:border-blue-700'
-                                }`}
-                        >
-                            <span>{pt.icon}</span> {pt.name}
-                        </button>
-                    ))}
-                </div>
-            </FilterSection>
+            {/* Category — from DB */}
+            {categories.length > 0 && (
+                <FilterSection title="Category">
+                    <div className="grid grid-cols-2 gap-1.5 mt-2">
+                        {categories.map(cat => (
+                            <button
+                                key={cat._id}
+                                onClick={() => setFilter('category', filters.category === cat.name ? '' : cat.name)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all ${filters.category === cat.name
+                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-blue-300 dark:hover:border-blue-700'
+                                    }`}
+                            >
+                                <span>{cat.icon || '📦'}</span> {cat.name}
+                            </button>
+                        ))}
+                    </div>
+                </FilterSection>
+            )}
 
             {/* Price Range */}
             <FilterSection title="Price Range">
@@ -191,22 +201,13 @@ export default function SearchPage() {
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                         {query ? `Results for "${query}"` : filters.rare ? '⚡ Rare Parts' : 'All Spare Parts'}
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} products found</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{loading ? 'Searching...' : `${products.length} products found`}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Mobile filter btn */}
-                    <button
-                        onClick={() => setSidebarOpen(true)}
-                        className="lg:hidden flex items-center gap-2 btn-outline text-xs"
-                    >
+                    <button onClick={() => setSidebarOpen(true)} className="lg:hidden flex items-center gap-2 btn-outline text-xs">
                         <Filter className="w-4 h-4" /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
                     </button>
-                    {/* Sort */}
-                    <select
-                        value={sort}
-                        onChange={e => setSort(e.target.value)}
-                        className="input-field max-w-[180px] text-xs py-2"
-                    >
+                    <select value={sort} onChange={e => setSort(e.target.value)} className="input-field max-w-[180px] text-xs py-2">
                         <option value="popular">Most Popular</option>
                         <option value="price-asc">Price: Low to High</option>
                         <option value="price-desc">Price: High to Low</option>
@@ -223,9 +224,9 @@ export default function SearchPage() {
                             {filters.brand} <button onClick={() => setFilter('brand', '')}><X className="w-3 h-3" /></button>
                         </span>
                     )}
-                    {filters.partType && (
+                    {filters.category && (
                         <span className="badge bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 gap-1">
-                            {filters.partType} <button onClick={() => setFilter('partType', '')}><X className="w-3 h-3" /></button>
+                            {filters.category} <button onClick={() => setFilter('category', '')}><X className="w-3 h-3" /></button>
                         </span>
                     )}
                     {filters.rare && (
@@ -260,7 +261,7 @@ export default function SearchPage() {
                             </div>
                             <Sidebar />
                             <button className="btn-primary w-full mt-5 justify-center" onClick={() => setSidebarOpen(false)}>
-                                Apply Filters ({filtered.length} results)
+                                Apply Filters ({products.length} results)
                             </button>
                         </div>
                     </div>
@@ -272,7 +273,7 @@ export default function SearchPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                             {[...Array(6)].map((_, i) => <ProductCard key={i} skeleton />)}
                         </div>
-                    ) : filtered.length === 0 ? (
+                    ) : products.length === 0 ? (
                         <div className="text-center py-20">
                             <p className="text-5xl mb-4">🔍</p>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No parts found</h3>
@@ -281,7 +282,7 @@ export default function SearchPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-                            {filtered.map(p => <ProductCard key={p.id} product={p} />)}
+                            {products.map(p => <ProductCard key={p._id} product={p} />)}
                         </div>
                     )}
                 </div>

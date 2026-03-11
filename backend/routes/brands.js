@@ -25,4 +25,13 @@ router.put('/:id', protect, adminOnly, asyncHandler(async (req, res) => {
     res.json({ success: true, brand });
 }));
 
+// @route DELETE /api/brands/:id — Admin
+router.delete('/:id', protect, adminOnly, asyncHandler(async (req, res) => {
+    const brand = await Brand.findById(req.params.id);
+    if (!brand) { res.status(404); throw new Error('Brand not found'); }
+    brand.isActive = false;
+    await brand.save();
+    res.json({ success: true, message: 'Brand removed' });
+}));
+
 export default router;

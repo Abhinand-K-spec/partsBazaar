@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Zap, TrendingUp, Star, ChevronRight } from 'lucide-react';
-import { products, brands, partTypes, technicianOffers, sampleSearchSuggestions, phoneModels } from '../data/mockData';
+import { technicianOffers, sampleSearchSuggestions, phoneModels } from '../data/mockData';
+import { apiGetTrendingProducts, apiGetRareProducts, apiGetBrands, apiGetProducts, apiGetCategories } from '../data/api';
 import ProductCard from '../components/products/ProductCard';
 
 const heroSearches = ['iPhone 11 Display', 'Redmi Note 8 Charging Port', 'Samsung A50 Battery', 'Nokia 6 Power Button'];
@@ -43,7 +44,6 @@ function HeroSection() {
 
     return (
         <section className="relative overflow-hidden bg-gradient-to-br from-blue-950 via-blue-900 to-indigo-900 py-20 px-4">
-            {/* Background decoration */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-700/20 rounded-full blur-3xl" />
                 <div className="absolute bottom-0 -left-24 w-80 h-80 bg-indigo-700/20 rounded-full blur-3xl" />
@@ -65,7 +65,6 @@ function HeroSection() {
                     From common to rare — displays, batteries, ports & more. Trusted by 10,000+ repair technicians.
                 </p>
 
-                {/* Hero Search */}
                 <div className="relative max-w-2xl mx-auto">
                     <div className="flex items-center bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-visible border border-white/20">
                         <div className="flex-1 relative">
@@ -89,7 +88,6 @@ function HeroSection() {
                         </button>
                     </div>
 
-                    {/* Suggestions */}
                     {showSugg && suggestions.length > 0 && (
                         <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden z-50">
                             {suggestions.map((s, i) => (
@@ -105,7 +103,6 @@ function HeroSection() {
                     )}
                 </div>
 
-                {/* Quick pills */}
                 <div className="flex flex-wrap justify-center gap-2 mt-6">
                     {heroSearches.map(s => (
                         <button
@@ -118,7 +115,6 @@ function HeroSection() {
                     ))}
                 </div>
 
-                {/* Stats */}
                 <div className="flex flex-wrap justify-center gap-8 mt-12">
                     {[
                         { value: '50,000+', label: 'Spare Parts' },
@@ -139,24 +135,21 @@ function HeroSection() {
 
 function RarePartFinder() {
     const [model, setModel] = useState('');
-    const [partType, setPartType] = useState('');
-    const [results, setResults] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [results, setResults] = useState(null);
+    const navigate = useNavigate();
 
-    const handleFind = () => {
-        if (!model && !partType) return;
+    const handleFind = async () => {
+        if (!model) return;
         setLoading(true);
         setResults(null);
-        setTimeout(() => {
-            const matches = products.filter(p => {
-                const modelMatch = model ? p.model.toLowerCase().includes(model.toLowerCase()) ||
-                    p.compatibleModels.some(m => m.toLowerCase().includes(model.toLowerCase())) : true;
-                const typeMatch = partType ? p.partType === partType : true;
-                return modelMatch && typeMatch;
-            });
-            setResults(matches);
-            setLoading(false);
-        }, 800);
+        try {
+            const { data } = await apiGetProducts({ q: model });
+            setResults(data.products || []);
+        } catch {
+            setResults([]);
+        }
+        setLoading(false);
     };
 
     return (
@@ -166,13 +159,14 @@ function RarePartFinder() {
                     <Zap className="w-4 h-4" /> Rare Part Finder
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Can't Find Your Part?</h2>
-                <p className="text-purple-200 text-sm">Tell us the phone model & part type — we'll find exact compatible parts</p>
+                <p className="text-purple-200 text-sm">Tell us the phone model — we'll find exact compatible parts</p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
                 <input
                     value={model}
                     onChange={e => setModel(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleFind()}
                     placeholder="Phone model (e.g. Nokia 6, iPhone X)"
                     className="flex-1 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400 text-sm"
                     list="model-list"
@@ -180,17 +174,6 @@ function RarePartFinder() {
                 <datalist id="model-list">
                     {phoneModels.map(m => <option key={m} value={m} />)}
                 </datalist>
-
-                <select
-                    value={partType}
-                    onChange={e => setPartType(e.target.value)}
-                    className="sm:w-48 px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-purple-400 text-sm"
-                >
-                    <option value="">All Part Types</option>
-                    {['display', 'battery', 'charging-port', 'camera', 'speaker', 'back-cover', 'power-button'].map(t => (
-                        <option key={t} value={t}>{t.replace('-', ' ')}</option>
-                    ))}
-                </select>
 
                 <button
                     onClick={handleFind}
@@ -216,7 +199,7 @@ function RarePartFinder() {
                             <p className="text-purple-200 text-sm mb-4 text-center">Found {results.length} compatible part{results.length !== 1 ? 's' : ''}</p>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {results.slice(0, 3).map(p => (
-                                    <ProductCard key={p.id} product={p} />
+                                    <ProductCard key={p._id} product={p} />
                                 ))}
                             </div>
                         </div>
@@ -228,16 +211,33 @@ function RarePartFinder() {
 }
 
 export default function HomePage() {
-    const [showSkeletons, setShowSkeletons] = useState(true);
     const navigate = useNavigate();
+    const [trending, setTrending] = useState([]);
+    const [rare, setRare] = useState([]);
+    const [brands, setBrands] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [loadingTrending, setLoadingTrending] = useState(true);
+    const [loadingRare, setLoadingRare] = useState(true);
 
     useEffect(() => {
-        const t = setTimeout(() => setShowSkeletons(false), 800);
-        return () => clearTimeout(t);
-    }, []);
+        apiGetTrendingProducts()
+            .then(res => setTrending(res.data.products || []))
+            .catch(() => {})
+            .finally(() => setLoadingTrending(false));
 
-    const trending = products.filter(p => p.isTrending).slice(0, 4);
-    const rare = products.filter(p => p.isRare).slice(0, 4);
+        apiGetRareProducts()
+            .then(res => setRare(res.data.products || []))
+            .catch(() => {})
+            .finally(() => setLoadingRare(false));
+
+        apiGetBrands()
+            .then(res => setBrands(res.data.brands || []))
+            .catch(() => {});
+
+        apiGetCategories()
+            .then(res => setCategories(res.data.categories || []))
+            .catch(() => {});
+    }, []);
 
     const popularModels = [
         { name: 'iPhone 11', image: 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=200&h=200&fit=crop', count: 48 },
@@ -253,26 +253,28 @@ export default function HomePage() {
             <HeroSection />
 
             <div className="max-w-7xl mx-auto px-4 sm:px-6">
-                {/* Part Types */}
-                <section className="py-12">
-                    <div className="flex items-center justify-between mb-6">
-                        <h2 className="section-title">Browse by Part Type</h2>
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-3">
-                        {partTypes.map(pt => (
-                            <button
-                                key={pt.id}
-                                onClick={() => navigate(`/search?partType=${pt.id}`)}
-                                className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
-                            >
-                                <span className="text-2xl">{pt.icon}</span>
-                                <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-center leading-tight">{pt.name}</span>
-                            </button>
-                        ))}
-                    </div>
-                </section>
+                {/* Categories from DB */}
+                {categories.length > 0 && (
+                    <section className="py-12">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="section-title">Browse by Category</h2>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 gap-3">
+                            {categories.map(cat => (
+                                <button
+                                    key={cat._id}
+                                    onClick={() => navigate(`/search?category=${encodeURIComponent(cat.name)}`)}
+                                    className="flex flex-col items-center gap-2 p-3 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
+                                >
+                                    <span className="text-2xl">{cat.icon || '📦'}</span>
+                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 text-center leading-tight">{cat.name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
-                {/* Trending Parts */}
+                {/* Trending */}
                 <section className="py-8">
                     <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-2">
@@ -284,9 +286,11 @@ export default function HomePage() {
                         </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                        {showSkeletons
+                        {loadingTrending
                             ? [...Array(4)].map((_, i) => <ProductCard key={i} skeleton />)
-                            : trending.map(p => <ProductCard key={p.id} product={p} />)
+                            : trending.length > 0
+                                ? trending.map(p => <ProductCard key={p._id} product={p} />)
+                                : <p className="col-span-4 text-center text-gray-400 py-8">No trending products yet.</p>
                         }
                     </div>
                 </section>
@@ -314,25 +318,27 @@ export default function HomePage() {
                     </div>
                 </section>
 
-                {/* Top Brands */}
-                <section className="py-8">
-                    <h2 className="section-title mb-6">Top Brands</h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                        {brands.map(brand => (
-                            <button
-                                key={brand.id}
-                                onClick={() => navigate(`/search?brand=${encodeURIComponent(brand.name)}`)}
-                                className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                            >
-                                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${brand.color} flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition-transform`}>
-                                    {brand.logo}
-                                </div>
-                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{brand.name}</p>
-                                <p className="text-xs text-gray-400">{brand.count} parts</p>
-                            </button>
-                        ))}
-                    </div>
-                </section>
+                {/* Top Brands — from DB */}
+                {brands.length > 0 && (
+                    <section className="py-8">
+                        <h2 className="section-title mb-6">Top Brands</h2>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                            {brands.map(brand => (
+                                <button
+                                    key={brand._id}
+                                    onClick={() => navigate(`/search?brand=${encodeURIComponent(brand.name)}`)}
+                                    className="group flex flex-col items-center gap-2 p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                >
+                                    <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${brand.color} flex items-center justify-center text-2xl shadow-md group-hover:scale-110 transition-transform`}>
+                                        {brand.logo}
+                                    </div>
+                                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{brand.name}</p>
+                                    <p className="text-xs text-gray-400">{brand.count} parts</p>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* Rare Parts */}
                 <section className="py-8">
@@ -346,9 +352,11 @@ export default function HomePage() {
                         </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                        {showSkeletons
+                        {loadingRare
                             ? [...Array(4)].map((_, i) => <ProductCard key={i} skeleton />)
-                            : rare.map(p => <ProductCard key={p.id} product={p} />)
+                            : rare.length > 0
+                                ? rare.map(p => <ProductCard key={p._id} product={p} />)
+                                : <p className="col-span-4 text-center text-gray-400 py-8">No rare products yet.</p>
                         }
                     </div>
                 </section>
@@ -376,7 +384,6 @@ export default function HomePage() {
                 </section>
             </div>
 
-            {/* Rare Part Finder */}
             <RarePartFinder />
         </div>
     );
