@@ -1,6 +1,16 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, Shield, Truck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { apiValidateCart } from '../data/api';
+import toast from 'react-hot-toast';
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+
+const getImageUrl = (img) => {
+    if (!img) return 'https://placehold.co/400x400?text=No+Image';
+    if (img.startsWith('http')) return img;
+    return `${API_BASE}${img}`;
+};
 
 export default function CartPage() {
     const { cartItems, removeFromCart, updateQuantity, totalPrice, clearCart } = useCart();
@@ -21,6 +31,26 @@ export default function CartPage() {
     const gst = Math.round(totalPrice * 0.18);
     const grandTotal = totalPrice + shipping + gst;
 
+    const handleProceed = async () => {
+        const tid = toast.loading('Verifying availability...');
+        try {
+            const stockRes = await apiValidateCart(
+                cartItems.map(i => ({ product: i._id || i.id, quantity: i.quantity, name: i.name }))
+            );
+            toast.dismiss(tid);
+            
+            if (!stockRes.data.valid) {
+                const invalid = stockRes.data.invalidItems[0];
+                toast.error(`Only ${invalid.available} left for ${invalid.name}. Please reduce quantity.`);
+                return;
+            }
+            navigate('/checkout');
+        } catch (err) {
+            toast.dismiss(tid);
+            toast.error("Could not verify stock. Try again.");
+        }
+    };
+
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
             <div className="flex items-center justify-between mb-8">
@@ -38,7 +68,7 @@ export default function CartPage() {
                     {cartItems.map(item => (
                         <div key={item._id || item.id} className="card p-5 flex gap-4">
                             <Link to={`/product/${item._id || item.id}`}>
-                                <img src={item.image} alt={item.name} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl flex-shrink-0 hover:scale-105 transition-transform" />
+                                <img src={getImageUrl(item.image)} alt={item.name} className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-xl flex-shrink-0 hover:scale-105 transition-transform" />
                             </Link>
 
                             <div className="flex-1 min-w-0">
@@ -112,7 +142,7 @@ export default function CartPage() {
                         )}
 
                         <button
-                            onClick={() => navigate('/checkout')}
+                            onClick={handleProceed}
                             className="btn-accent w-full justify-center py-3.5 text-base"
                         >
                             Proceed to Checkout <ArrowRight className="w-4 h-4" />

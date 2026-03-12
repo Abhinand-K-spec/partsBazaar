@@ -3,8 +3,16 @@ import { useNavigate, Link } from 'react-router-dom';
 import { CheckCircle, Lock, CreditCard, Smartphone, Building2, ChevronRight, Package, Loader2, Plus } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { apiCreateOrder, apiVerifyPayment, apiGetMe, apiAddAddress } from '../data/api';
+import { apiCreateOrder, apiVerifyPayment, apiGetMe, apiAddAddress, apiValidateCart } from '../data/api';
 import toast from 'react-hot-toast';
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5001/api').replace('/api', '');
+
+const getImageUrl = (img) => {
+    if (!img) return 'https://placehold.co/400x400?text=No+Image';
+    if (img.startsWith('http')) return img;
+    return `${API_BASE}${img}`;
+};
 
 const STEPS = ['Address', 'Payment', 'Confirm'];
 
@@ -20,7 +28,7 @@ export default function CheckoutPage() {
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
     const [orderId, setOrderId] = useState(null); // DB order ID
-    
+
     // Address Selection State
     const { user } = useAuth();
     const [savedAddresses, setSavedAddresses] = useState([]);
@@ -43,7 +51,7 @@ export default function CheckoutPage() {
                     });
                 }
             }).catch(err => console.error("Failed to load addresses", err))
-              .finally(() => setLoadingAddresses(false));
+                .finally(() => setLoadingAddresses(false));
         }
     }, [user]);
 
@@ -88,6 +96,7 @@ export default function CheckoutPage() {
     };
 
     const processRazorpay = async (orderData) => {
+        console.log('Processing Razorpay payment...');
         const res = await loadRazorpayScript();
         if (!res) {
             toast.error('Razorpay SDK failed to load. Are you online?');
@@ -147,6 +156,24 @@ export default function CheckoutPage() {
                     toast.error("Could not save address to profile.");
                 }
             }
+
+            // Verify stock against live DB before proceeding
+            const validTid = toast.loading('Verifying stock availability...');
+            try {
+                const stockRes = await apiValidateCart(cartItems.map(i => ({ product: i._id || i.id, quantity: i.quantity, name: i.name })));
+                toast.dismiss(validTid);
+                
+                if (!stockRes.data.valid) {
+                    const invalid = stockRes.data.invalidItems[0];
+                    toast.error(`Only ${invalid.available} left for ${invalid.name}. Please reduce quantity in cart.`);
+                    return;
+                }
+            } catch (err) {
+                toast.dismiss(validTid);
+                toast.error("Could not verify stock. Please try again.");
+                return;
+            }
+
             setStep(1);
             return;
         }
@@ -161,12 +188,12 @@ export default function CheckoutPage() {
         const tid = toast.loading('Processing order...');
         try {
             const payload = {
-                items: cartItems.map(i => ({ 
-                    product: i._id || i.id, 
-                    name: i.name, 
-                    image: i.image, 
-                    price: i.price, 
-                    quantity: i.quantity 
+                items: cartItems.map(i => ({
+                    product: i._id || i.id,
+                    name: i.name,
+                    image: i.image,
+                    price: i.price,
+                    quantity: i.quantity
                 })),
                 shippingAddress: address,
                 subtotal: totalPrice,
@@ -262,14 +289,14 @@ export default function CheckoutPage() {
                     {step === 0 && (
                         <div className="card p-6 space-y-5">
                             <h2 className="font-bold text-gray-900 dark:text-white text-lg flex items-center gap-2"><Package className="w-5 h-5 text-blue-600" /> Delivery Address</h2>
-                            
+
                             {user && savedAddresses.length > 0 && (
                                 <div className="space-y-3 mb-6">
                                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Select a Saved Address</label>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         {savedAddresses.map(addr => (
-                                            <div 
-                                                key={addr._id} 
+                                            <div
+                                                key={addr._id}
                                                 onClick={() => handleSelectAddress(addr)}
                                                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedAddressId === addr._id ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'}`}
                                             >
@@ -281,7 +308,7 @@ export default function CheckoutPage() {
                                                 <p className="text-xs text-gray-500 mt-1">{addr.phone}</p>
                                             </div>
                                         ))}
-                                        <div 
+                                        <div
                                             onClick={() => handleSelectAddress('new')}
                                             className={`p-4 rounded-xl border-2 cursor-pointer border-dashed flex flex-col items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-600 transition-all ${selectedAddressId === 'new' ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-300 dark:border-gray-700'}`}
                                         >
@@ -294,7 +321,7 @@ export default function CheckoutPage() {
 
                             {(!user || savedAddresses.length === 0 || selectedAddressId === 'new') && (
                                 <div className="space-y-4">
-                                   {user && savedAddresses.length > 0 && <hr className="border-gray-200 dark:border-gray-700 my-4" />}
+                                    {user && savedAddresses.length > 0 && <hr className="border-gray-200 dark:border-gray-700 my-4" />}
                                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Enter Delivery Details</h3>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {[
@@ -380,7 +407,7 @@ export default function CheckoutPage() {
                             <div className="space-y-3">
                                 {cartItems.map(item => (
                                     <div key={item._id || item.id} className="flex items-center gap-3 py-3 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                                        <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl" />
+                                        <img src={getImageUrl(item.image)} alt={item.name} className="w-14 h-14 object-cover rounded-xl" />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-semibold text-gray-900 dark:text-white line-clamp-1">{item.name}</p>
                                             <p className="text-xs text-gray-400">Qty: {item.quantity}</p>

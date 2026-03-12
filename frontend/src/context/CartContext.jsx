@@ -16,27 +16,50 @@ export function CartProvider({ children }) {
 
     const addToCart = (product, quantity = 1) => {
         setCartItems(prev => {
-            const existing = prev.find(i => i.id === product.id);
+            const productId = product._id || product.id;
+            const existing = prev.find(i => (i._id || i.id) === productId);
+            
             if (existing) {
-                toast.success(`Qty updated — ${product.name}`, { id: `cart-${product.id}` });
-                return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + quantity } : i);
+                const newQty = existing.quantity + quantity;
+                if (newQty > (product.stock || 99)) {
+                    toast.error(`Only ${product.stock} available in stock!`, { id: `err-${productId}` });
+                    return prev; // Do not update
+                }
+                toast.success(`Qty updated — ${product.name}`, { id: `cart-${productId}` });
+                return prev.map(i => (i._id || i.id) === productId ? { ...i, quantity: newQty } : i);
             }
-            toast.success(`Added to cart — ${product.name}`, { id: `cart-${product.id}` });
+
+            if (quantity > (product.stock || 99)) {
+                toast.error(`Only ${product.stock} available in stock!`, { id: `err-${productId}` });
+                return prev;
+            }
+
+            toast.success(`Added to cart — ${product.name}`, { id: `cart-${productId}` });
             return [...prev, { ...product, quantity }];
         });
     };
 
     const removeFromCart = (id) => {
         setCartItems(prev => {
-            const item = prev.find(i => i.id === id);
+            const item = prev.find(i => (i._id || i.id) === id);
             if (item) toast('Removed from cart', { icon: '🗑️', id: `rm-${id}` });
-            return prev.filter(i => i.id !== id);
+            return prev.filter(i => (i._id || i.id) !== id);
         });
     };
 
     const updateQuantity = (id, quantity) => {
         if (quantity <= 0) return removeFromCart(id);
-        setCartItems(prev => prev.map(i => i.id === id ? { ...i, quantity } : i));
+        
+        setCartItems(prev => prev.map(i => {
+            if ((i._id || i.id) === id) {
+                if (quantity > (i.stock || 99)) {
+                    toast.error(`Only ${i.stock} available in stock!`, { id: `err-${id}` });
+                    return i;
+                }
+                return { ...i, quantity };
+            }
+            return i;
+        }));
     };
 
     const clearCart = () => setCartItems([]);

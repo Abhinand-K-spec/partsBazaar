@@ -39,6 +39,7 @@ export const apiGetProducts = (params) => API.get('/products', { params });
 export const apiGetTrendingProducts = () => API.get('/products/trending');
 export const apiGetRareProducts = () => API.get('/products/rare');
 export const apiGetProduct = (id) => API.get(`/products/${id}`);
+export const apiValidateCart = (items) => API.post('/products/validate-cart', { items });
 export const apiCreateProduct = (data) => API.post('/products', data);
 export const apiUpdateProduct = (id, data) => API.put(`/products/${id}`, data);
 export const apiDeleteProduct = (id) => API.delete(`/products/${id}`);

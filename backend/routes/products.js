@@ -89,6 +89,34 @@ router.post('/', protect, adminOnly, asyncHandler(async (req, res) => {
     res.status(201).json({ success: true, product });
 }));
 
+// @route POST /api/products/validate-cart — Validate cart stock
+router.post('/validate-cart', asyncHandler(async (req, res) => {
+    const { items } = req.body;
+    if (!items || !items.length) {
+        return res.json({ success: true, valid: true });
+    }
+
+    const invalidItems = [];
+
+    for (const item of items) {
+        const product = await Product.findById(item.product);
+        if (!product || product.stock < item.quantity) {
+            invalidItems.push({
+                product: item.product,
+                name: item.name || (product ? product.name : 'Unknown Product'),
+                requested: item.quantity,
+                available: product ? product.stock : 0
+            });
+        }
+    }
+
+    if (invalidItems.length > 0) {
+        return res.json({ success: true, valid: false, invalidItems });
+    }
+
+    res.json({ success: true, valid: true });
+}));
+
 // @route PUT /api/products/:id — Admin
 router.put('/:id', protect, adminOnly, asyncHandler(async (req, res) => {
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {

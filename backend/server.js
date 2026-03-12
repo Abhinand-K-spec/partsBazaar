@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import morgan from 'morgan';
 import colors from 'colors';
+
+dotenv.config(); // Must run BEFORE routes are imported so Razorpay SDK sees the keys
+
 import connectDB from './config/db.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 
@@ -19,7 +22,6 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config();
 connectDB();
 
 const app = express();
@@ -64,7 +66,7 @@ app.get('/api/health', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
     console.log(`\n🚀 PartsBazaar API running on port ${PORT}`.yellow.bold);
     console.log(`📡 Mode: ${process.env.NODE_ENV}`.cyan);

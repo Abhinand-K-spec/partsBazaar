@@ -10,8 +10,8 @@ import { adminOnly } from '../middleware/admin.js';
 const router = express.Router();
 
 const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key_id',
-    key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret',
+    key_id: 'rzp_test_SQBYHPfcX7L5jl',
+    key_secret: '6Rf0On0p0JtL97lD2jX4H3Q3',
 });
 
 const buildTimeline = (status) => {
@@ -26,13 +26,16 @@ const buildTimeline = (status) => {
     return steps.map((s, i) => ({
         ...s,
         done: i <= currentIndex,
-        date: i <= currentIndex ? new Date().toLocaleDateString('en-IN') : null,
+        date: i <= currentIndex ? new Date() : null,
     }));
 };
 
 // @route POST /api/orders — Create order
 router.post('/', protect, asyncHandler(async (req, res) => {
     const { items, shippingAddress, paymentMethod } = req.body;
+    console.log('Payment method:', paymentMethod);
+    console.log('Items:', items);
+    console.log('Shipping address:', shippingAddress);
 
     if (!items || items.length === 0) {
         res.status(400);
@@ -63,8 +66,10 @@ router.post('/', protect, asyncHandler(async (req, res) => {
         itemsPrice += product.price * item.quantity;
 
         // Deduct stock
-        product.stock -= item.quantity;
-        await product.save();
+        await Product.updateOne(
+            { _id: product._id },
+            { $inc: { stock: -item.quantity } }
+        );
     }
 
     const shippingPrice = itemsPrice > 2000 ? 0 : 99;
@@ -74,15 +79,24 @@ router.post('/', protect, asyncHandler(async (req, res) => {
     // For Razorpay
     let razorpayOrderId = null;
     if (paymentMethod === 'razorpay') {
+        console.log('Razorpay keys:', process.env.RAZORPAY_KEY_ID, process.env.RAZORPAY_KEY_SECRET);
         if (process.env.RAZORPAY_KEY_ID === 'dummy_key_id' || !process.env.RAZORPAY_KEY_ID) {
             res.status(500);
             throw new Error('Razorpay keys are not configured in backend .env');
         }
-        const razorpayOrder = await razorpay.orders.create({
-            amount: Math.round(totalPrice * 100),
-            currency: 'INR',
-            receipt: `rcpt_${Date.now()}`,
-        });
+        let razorpayOrder;
+        try {
+            console.log("Creating Razorpay order for amount:", Math.round(totalPrice * 100));
+            razorpayOrder = await razorpay.orders.create({
+                amount: Math.round(totalPrice * 100),
+                currency: 'INR',
+                receipt: `rcpt_${Date.now()}`,
+            });
+        } catch (rzpErr) {
+            console.error("Razorpay Error:", rzpErr);
+            res.status(400);
+            throw new Error(`Razorpay failed to create order: ${rzpErr.error?.description || rzpErr.message}`);
+        }
         razorpayOrderId = razorpayOrder.id;
     }
 
@@ -103,7 +117,7 @@ router.post('/', protect, asyncHandler(async (req, res) => {
 
     if (paymentMethod === 'cod') {
         // Assume COD isn't paid until delivery, or if they want it true we can do that. Setting to false.
-        order.isPaid = false; 
+        order.isPaid = false;
         await order.save();
     }
 
@@ -121,8 +135,10 @@ router.post('/', protect, asyncHandler(async (req, res) => {
     }
 }));
 
-// @route POST /api/orders/verify — Verify Razorpay Payment
+// @route POST 
+// /verify — Verify Razorpay Payment
 router.post('/verify', protect, asyncHandler(async (req, res) => {
+    console.log('Verifying Razorpay payment...');
     const { orderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
     const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
